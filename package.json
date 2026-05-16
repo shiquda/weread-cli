@@ -7,14 +7,14 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/shiquda/weread-cli.git"
+    "url": "git+https://github.com/shiquda/weread-cli.git"
   },
   "bugs": {
     "url": "https://github.com/shiquda/weread-cli/issues"
   },
   "homepage": "https://github.com/shiquda/weread-cli#readme",
   "bin": {
-    "weread": "./dist/cli.js"
+    "weread": "dist/cli.js"
   },
   "publishConfig": {
     "access": "public"
