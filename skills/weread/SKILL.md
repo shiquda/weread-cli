@@ -1,15 +1,15 @@
 ---
 name: weread
-description: "Use this skill for 微信读书 and WeRead tasks, including book search, shelf inspection, reading progress, notes, highlights, reviews, reading statistics, and recommendations. It instructs agents to use the local weread CLI instead of writing curl requests."
+description: "Use this skill for 微信读书 and WeRead tasks, including book search, shelf inspection, reading progress, notes, highlights, reviews, reading statistics, recommendations, or first-time API key setup. It instructs agents to use the local weread CLI."
 ---
 
 # WeRead
 
-Use the local `weread` command as the only normal execution layer for WeRead tasks. The CLI is based on the officially supported WeRead APIs and already handles authentication, flattened request parameters, `skill_version`, JSON parsing, upgrade checks, and normalized errors.
+Use the local `weread` command as the execution layer for WeRead tasks. The CLI is based on WeRead officially supported APIs and handles authentication, request shape, `skill_version`, JSON parsing, upgrade checks, and normalized errors.
 
-Do not write ad hoc `curl` requests for routine WeRead work. Use the raw command only as a fallback for a newly exposed endpoint that has no first-class command yet.
+Do not write ad hoc `curl` requests for normal work. The agent-facing abstraction is the CLI.
 
-## Quick Start
+## First Decision
 
 Run this before any WeRead API work:
 
@@ -17,24 +17,16 @@ Run this before any WeRead API work:
 weread --json doctor
 ```
 
-If `auth_configured` is false, ask the user to initialize credentials:
+If `auth_configured` is false, read `references/first-use.md` and guide the user through getting an API Key from:
 
-```bash
-weread config set-key "wrk-..."
+```text
+https://weread.qq.com/r/weread-skills
 ```
 
-Credentials are read in this order:
-
-1. `WEREAD_API_KEY`
-2. `~/.weread-cli/config.json`
-
-Useful setup commands:
+Then configure it with:
 
 ```bash
-weread config path
-weread config list
 weread config set-key "wrk-..."
-weread config set-timeout 30000
 ```
 
 Use `--json` whenever you need to parse, combine, paginate, or cite exact fields. Human-readable output is acceptable only for short direct answers.
@@ -63,14 +55,21 @@ weread --json discover similar <bookId> --count 12
 weread --json api list
 ```
 
-Use the raw escape hatch only when necessary:
+Use the raw escape hatch only when a supported API is not covered by a first-class command:
 
 ```bash
 weread --json api call /store/search --param keyword=三体 --param scope=10
-weread --json api call /book/readreviews --body-json '{"bookId":"695233","chapterUid":107,"reviews":[{"range":"900-2004","count":20}]}'
 ```
 
-When using `api call`, keep business parameters flattened at the top level. Do not wrap them in `params`, `data`, or `body`; the CLI inserts `api_name` and `skill_version`.
+## When To Read References
+
+- First-time setup, missing auth, or API Key questions: read `references/first-use.md`.
+- Shelf totals, public/private shelf counts, audiobook handling, or article-collection handling: read `references/domain-rules.md`.
+- Notes, highlights, bookmarks, personal ideas, public reviews, or exports: read `references/domain-rules.md`.
+- Reading statistics, historical periods, cross-year ranges, or time-unit interpretation: read `references/domain-rules.md`.
+- Deep links to books, chapters, highlights, or ideas: read `references/domain-rules.md`.
+
+The references intentionally omit low-level request mechanics already handled by the CLI.
 
 ## Intent Routing
 
@@ -95,29 +94,25 @@ Book details:
 Shelf:
 
 - Use `weread --json shelf list`.
-- For total visible shelf items, compute `books.length + albums.length + (mp ? 1 : 0)`.
-- Albums are audiobooks and count as shelf items.
-- `mp` is an article-collection entry and counts as one visible shelf item when present.
+- For simple shelf totals, compute `books.length + albums.length + (mp ? 1 : 0)`.
+- For anything more nuanced, read `references/domain-rules.md`.
 
 Reading statistics:
 
 - Use `weread --json readdata detail`.
 - Modes are `weekly`, `monthly`, `annually`, and `overall`.
-- Time fields such as `totalReadTime`, `dayAverageReadTime`, and `readLongest[].readTime` are seconds.
-- `dayAverageReadTime` is averaged over natural days, not reading days.
+- Time fields are seconds.
+- Read `references/domain-rules.md` for historical or cross-period calculations.
 
 Notes and highlights:
 
 - Notebook overview: `weread --json notes notebooks`.
-- Single-book exportable content needs both:
+- Single-book exportable content usually needs both:
   ```bash
   weread --json notes bookmarks <bookId>
   weread --json notes mine <bookId>
   ```
-- Notebook total notes use `reviewCount + noteCount + bookmarkCount`.
-- `noteCount` means highlight count, not total notes.
-- Exportable content is highlights plus personal ideas and reviews. Bookmark positions are counted but not exportable as content.
-- Public reviews are not personal notes; use `reviews list`.
+- Read `references/domain-rules.md` before answering totals, exports, bookmark questions, or popular-highlight questions.
 
 Reviews:
 
@@ -158,7 +153,7 @@ The CLI returns normalized JSON errors:
 
 Handle important error types this way:
 
-- `missing_auth`: ask for `weread config set-key`.
+- `missing_auth`: read `references/first-use.md` and help configure the key.
 - `upgrade_required`: stop immediately and follow `upgrade_info.message`; do not continue the original workflow until upgraded.
 - `api_error`, `http_error`, `network_error`, `invalid_json`: report the failure and retry only when repeating the request is safe.
 
@@ -169,7 +164,4 @@ When summarizing results for the user:
 - Convert Unix timestamps to dates.
 - Convert seconds to hours and minutes.
 - Use numbered lists for search results, shelf entries, notes, reviews, and recommendations.
-- Include WeRead deep links when useful:
-  - Book: `weread://reading?bId={bookId}`
-  - Chapter: `weread://reading?bId={bookId}&chapterUid={chapterUid}`
-  - Highlight: `weread://bestbookmark?bookId={bookId}&chapterUid={chapterUid}&rangeStart={start}&rangeEnd={end}&userVid={userVid}`
+- Include WeRead deep links when useful; read `references/domain-rules.md` for link formats and edge cases.

@@ -6,6 +6,14 @@ CLI 命令名是 `weread`。项目内同时提供了一个配套 Skill，指导 
 
 ## 安装
 
+发布版本：
+
+```powershell
+npm install -g weread-agent-cli
+```
+
+本地开发：
+
 ```powershell
 npm install
 npm run build
@@ -21,7 +29,12 @@ weread --json doctor
 
 ## 配置凭据
 
-推荐用 CLI 初始化：
+首次使用需要先获取微信读书 API Key：
+
+1. 打开官方页面：https://weread.qq.com/r/weread-skills
+2. 登录要连接的微信读书账号。
+3. 在页面中获取 API Key，格式通常是 `wrk-...`。
+4. 用 CLI 保存到本机：
 
 ```powershell
 weread config set-key "wrk-..."
@@ -45,6 +58,12 @@ $env:WEREAD_API_KEY = "wrk-..."
 weread config path
 weread config list
 weread config set-timeout 30000
+```
+
+配置后检查：
+
+```powershell
+weread --json doctor
 ```
 
 ## 常用命令
@@ -76,20 +95,22 @@ weread --json api call /store/search --param keyword=三体 --param scope=10
 
 ## Skill 安装
 
+推荐使用 `skills` CLI 安装：
+
+```powershell
+npx skills add shiquda/weread-cli
+```
+
 项目内 Skill 位于：
 
 ```text
 skills/weread/SKILL.md
+skills/weread/references/
 ```
 
-本机使用时可以复制到 Agent 的用户 Skill 目录，例如：
+也可以手动复制到 Agent 的用户 Skill 目录。
 
-```text
-~/.agents/skills/weread/SKILL.md
-~/.codex/skills/weread/SKILL.md
-```
-
-Skill 的职责是指导 Agent 调用本地 `weread` CLI、处理分页和错误，并解释微信读书字段口径；具体 API 调用细节由 CLI 封装。
+Skill 的职责是指导 Agent 调用本地 `weread` CLI、处理分页和错误，并解释微信读书字段口径；具体 API 调用细节由 CLI 封装。首次配置说明在 `skills/weread/references/first-use.md`，领域口径说明在 `skills/weread/references/domain-rules.md`。
 
 ## 测试
 
