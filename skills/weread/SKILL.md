@@ -9,7 +9,9 @@ The local `weread` CLI is the only interface you need. It handles authentication
 
 Agents should use `--json` by default. Use human-readable output only when the user explicitly wants terminal-readable command output.
 
-For large outputs such as shelf, notebooks, bookmarks, or exports, redirect JSON or Markdown to a file first, then summarize the result in chat. Do not paste full large JSON payloads into the conversation.
+For large outputs such as shelf, notebooks, bookmarks, or exports, write JSON or Markdown to a file first, then summarize the result in chat. Do not paste full large JSON payloads or full exported notes into the conversation.
+
+For `notes export`, use `--output <path>` by default. Only stream the export to stdout when the user explicitly asks to see the full export inline.
 
 ## First Decision
 
@@ -98,7 +100,7 @@ Use `weread --json readdata summary --mode monthly` for common summaries, or `we
 
 - Overview across all books: `weread --json notes notebooks`
 - Books with the most personal notes/highlights: `weread --json notes top --limit 20`
-- Single-book export: `weread notes export <bookId> --format markdown --output <path>`
+- Single-book export: `weread notes export <bookId> --format markdown --output <path>`; choose a local Markdown path and summarize counts/content instead of pasting the whole file
 - If manually combining data, use both `weread --json notes bookmarks <bookId>` and `weread --json notes mine <bookId>`
 - For counting rules, export limits, or popular highlight queries, read `references/domain-rules.md`
 

@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { Command } from "commander";
+import { createRequire } from "node:module";
 import { writeFileSync } from "node:fs";
 import { WereadClient, WereadError, type GatewayParams } from "./client.js";
 import { configPath, maskSecret, readConfig, updateConfig } from "./config.js";
@@ -25,6 +26,7 @@ import {
   formatChapters,
   formatNotebooks,
   formatNotesTop,
+  formatPopularBookmarks,
   formatProgress,
   formatReadData,
   formatRecommendations,
@@ -39,11 +41,13 @@ import {
 } from "./format.js";
 
 const program = new Command();
+const require = createRequire(import.meta.url);
+const packageJson = require("../package.json") as { version: string };
 
 program
   .name("weread")
   .description("基于微信读书官方支持 API 的命令行工具")
-  .version("0.1.0")
+  .version(packageJson.version)
   .option("--json", "emit JSON to stdout only")
   .option("--compact", "with --json, emit compact agent-friendly items where supported");
 
@@ -231,7 +235,10 @@ withOutputOptions(shelf.command("list").description("Get /shelf/sync")).action(w
 }));
 
 withOutputOptions(shelf.command("recent").description("Show recently read or updated shelf books")).action(withClient(async function (client) {
-  await runCall(this, client, "/shelf/sync", {}, formatShelfRecent, 10);
+  const result = await client.call("/shelf/sync", {});
+  const limit = outputLimit(this.optsWithGlobals<{ limit?: string; all?: boolean }>(), 10);
+  const data = sortShelfRecentData(result.data, limit);
+  await printSynthetic(this, "/shelf/recent", data, formatShelfRecent);
 }));
 
 const readdata = program.command("readdata").description("Reading statistics");
@@ -312,10 +319,10 @@ notes
   .option("--all", "fetch and rank all notebook pages")
   .option("--compact", "with --json, emit compact agent-friendly items")
   .action(withClient(async function (client, opts: { limit?: string; all?: boolean }) {
-    const limit = outputLimit(opts, 20);
-    const data = opts.all ? await fetchAllNotebooks(client) : (await client.call("/user/notebooks", { count: limit ?? 100 })).data;
+    const limit = positiveIntOption(opts.limit, "--limit") ?? 20;
+    const data = opts.all ? await fetchAllNotebooks(client) : (await client.call("/user/notebooks", { count: Math.max(limit, 100) })).data;
     const sorted = sortNotebookData(data);
-    await printSynthetic(this, "/user/notebooks", sorted, formatNotesTop, 20);
+    await printSynthetic(this, "/user/notebooks", limitNotebookData(sorted, limit), formatNotesTop);
   }));
 
 notes
@@ -399,7 +406,7 @@ notes
         chapterUid: intOption(opts.chapterUid, "--chapter-uid"),
         synckey: intOption(opts.synckey, "--synckey")
       }),
-      formatBookmarks,
+      formatPopularBookmarks,
       80
     );
   }));
@@ -660,8 +667,34 @@ function sortNotebookData(data: unknown): unknown {
   return { ...(isRecord(data) ? data : {}), books };
 }
 
+function limitNotebookData(data: unknown, limit: number): unknown {
+  const books = arrayField(data, "books");
+  return {
+    ...(isRecord(data) ? data : {}),
+    books: books.slice(0, limit),
+    totalBookCount: Math.max(numberField(data, "totalBookCount") ?? 0, books.length)
+  };
+}
+
+function sortShelfRecentData(data: unknown, limit: number | undefined): unknown {
+  const books = arrayField(data, "books").slice().sort((a, b) => recentTimestamp(b) - recentTimestamp(a));
+  return {
+    ...(isRecord(data) ? data : {}),
+    books: limit === undefined ? books : books.slice(0, limit),
+    totalBookCount: Math.max(numberField(data, "totalBookCount") ?? 0, books.length)
+  };
+}
+
 function noteTotal(item: unknown): number {
   return Number(objectField(item, "reviewCount") ?? 0) + Number(objectField(item, "noteCount") ?? 0) + Number(objectField(item, "bookmarkCount") ?? 0);
+}
+
+function recentTimestamp(book: unknown): number {
+  for (const key of ["lastReadTime", "readUpdateTime", "updateTime", "finishReadingTime", "sort"]) {
+    const value = objectField(book, key);
+    if (typeof value === "number" && Number.isFinite(value)) return value;
+  }
+  return 0;
 }
 
 function arrayField(value: unknown, key: string): unknown[] {

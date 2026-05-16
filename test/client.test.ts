@@ -105,3 +105,35 @@ test("client retries transient HTTP 499 responses", async () => {
     server.close();
   }
 });
+
+test("client maps persistent HTTP 499 to retryable upstream_timeout", async () => {
+  let requests = 0;
+  const server = createServer((_req, res) => {
+    requests += 1;
+    res.statusCode = 499;
+    res.setHeader("content-type", "application/json");
+    res.end(JSON.stringify({ message: "timeout" }));
+  });
+
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  try {
+    const address = server.address();
+    assert(address && typeof address === "object");
+    const client = new WereadClient({
+      apiKey: "wrk-test-token",
+      baseUrl: `http://127.0.0.1:${address.port}`,
+      timeoutMs: 5000
+    });
+
+    await assert.rejects(() => client.call("/review/list", { bookId: "1" }), (error) => {
+      assert(error instanceof WereadError);
+      assert.equal(error.failure.error.type, "upstream_timeout");
+      assert.equal(error.failure.error.retryable, true);
+      assert.equal(error.failure.error.attempts, 3);
+      return true;
+    });
+    assert.equal(requests, 3);
+  } finally {
+    server.close();
+  }
+});

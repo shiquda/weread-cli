@@ -108,6 +108,7 @@ export function formatShelfRecent(data: unknown, options: FormatOptions = {}): s
     .slice()
     .sort((a, b) => recentTimestamp(b) - recentTimestamp(a));
   if (!books.length) return "No books returned.";
+  const totalBookCount = numberField(data, "totalBookCount") ?? books.length;
   const visible = takeLimit(books, options.limit);
   const lines = visible.map((book, idx) => {
     const title = stringField(book, "title") ?? "(untitled)";
@@ -116,7 +117,7 @@ export function formatShelfRecent(data: unknown, options: FormatOptions = {}): s
     const updated = dateText(recentTimestamp(book));
     return `${idx + 1}. ${title}${author ? ` - ${author}` : ""}${bookId ? ` | id ${bookId}` : ""}${updated ? ` | ${updated}` : ""}`;
   });
-  lines.push(...truncateHint("recent books", visible.length, books.length));
+  lines.push(...truncateHint("recent books", visible.length, Math.max(totalBookCount, books.length)));
   return lines.join("\n");
 }
 
@@ -211,6 +212,7 @@ export function formatNotesTop(data: unknown, options: FormatOptions = {}): stri
     .slice()
     .sort((a, b) => noteTotal(b) - noteTotal(a));
   if (!books.length) return "No notebook books returned.";
+  const totalBookCount = numberField(data, "totalBookCount") ?? books.length;
   const visible = takeLimit(books, options.limit);
   const lines = visible.map((item, idx) => {
     const book = field(item, "book") ?? item;
@@ -219,7 +221,7 @@ export function formatNotesTop(data: unknown, options: FormatOptions = {}): stri
     const bookId = stringField(item, "bookId") ?? stringField(book, "bookId") ?? "";
     return `${idx + 1}. ${title}${author ? ` - ${author}` : ""} | notes ${noteTotal(item)} | id ${bookId}`;
   });
-  lines.push(...truncateHint("notebook books", visible.length, books.length));
+  lines.push(...truncateHint("notebook books", visible.length, Math.max(totalBookCount, books.length)));
   return lines.join("\n");
 }
 
@@ -249,6 +251,12 @@ export function formatBookmarks(data: unknown, options: FormatOptions = {}): str
   });
   lines.push(...truncateHint("highlights", visible.length, marks.length));
   return lines.join("\n\n");
+}
+
+export function formatPopularBookmarks(data: unknown, options: FormatOptions = {}): string {
+  const marks = asArray(field(data, "updated"));
+  if (!marks.length) return JSON.stringify(emptyJson(data, "no_popular_highlights"), null, 2);
+  return formatBookmarks(data, options);
 }
 
 export function formatRecommendations(data: unknown, options: FormatOptions = {}): string {
@@ -400,6 +408,10 @@ function normalizedItems(apiName: string, data: unknown): { items: unknown[]; to
     const items = notebookItems(data);
     return { items, totalCount: numberField(data, "totalBookCount") ?? items.length, emptyReason: items.length ? undefined : "no_notebooks" };
   }
+  if (apiName === "/shelf/recent") {
+    const items = shelfRecentItems(data);
+    return { items, totalCount: numberField(data, "totalBookCount") ?? items.length, emptyReason: items.length ? undefined : "no_recent_books" };
+  }
   if (apiName === "/book/recommend" || apiName === "/book/similar") {
     const items = recommendationItems(data).map(bookItem);
     return { items, totalCount: items.length, emptyReason: items.length ? undefined : "no_recommendations" };
@@ -484,6 +496,19 @@ function notebookItems(data: unknown): unknown[] {
       sort: field(item, "sort")
     };
   });
+}
+
+function shelfRecentItems(data: unknown): unknown[] {
+  return asArray(field(data, "books")).map((book) => ({
+    type: "book",
+    bookId: stringField(book, "bookId"),
+    title: stringField(book, "title"),
+    author: stringField(book, "author"),
+    lastReadTime: field(book, "lastReadTime"),
+    readUpdateTime: field(book, "readUpdateTime"),
+    updateTime: field(book, "updateTime"),
+    sort: field(book, "sort")
+  }));
 }
 
 function recommendationItems(data: unknown): unknown[] {

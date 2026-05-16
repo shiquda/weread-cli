@@ -1,6 +1,6 @@
 {
   "name": "weread-agent-cli",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Agent-friendly CLI based on officially supported WeRead APIs.",
   "type": "module",
   "author": "shiquda",
