@@ -27,7 +27,7 @@
     "build": "tsc -p tsconfig.json",
     "dev": "tsx src/cli.ts",
     "check": "tsc -p tsconfig.json --noEmit",
-    "test": "node --import tsx --test test/**/*.test.ts"
+    "test": "node --import tsx --test test/*.test.ts"
   },
   "dependencies": {
     "commander": "^14.0.2"
