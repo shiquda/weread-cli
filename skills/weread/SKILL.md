@@ -7,7 +7,9 @@ description: "Use this skill whenever the user mentions 微信读书, WeRead, �
 
 The local `weread` CLI is the only interface you need. It handles authentication, request shape, `skill_version`, JSON parsing, upgrade checks, and normalized errors — writing ad hoc `curl` requests would mean reimplementing all of that and losing the normalized error layer.
 
-Use normal human-readable output for direct answers. Use `--json` only when a script or exact structured extraction needs stable machine-readable output, such as pagination or cross-command field joins.
+Agents should use `--json` by default. Use human-readable output only when the user explicitly wants terminal-readable command output.
+
+For large outputs such as shelf, notebooks, bookmarks, or exports, redirect JSON or Markdown to a file first, then summarize the result in chat. Do not paste full large JSON payloads into the conversation.
 
 ## First Decision
 
@@ -23,13 +25,18 @@ If the `weread` command is missing, or if `auth_configured` is false, read `refe
 
 ```bash
 weread search "三体" --scope book --count 10
+weread book resolve "三体" --limit 5
 weread book info <bookId>
 weread book chapters <bookId>
 weread book progress <bookId>
 weread shelf list
+weread shelf recent --limit 10
 weread readdata detail --mode monthly
+weread readdata summary --mode monthly
 weread notes notebooks --count 100
+weread notes top --limit 20
 weread notes bookmarks <bookId>
+weread notes export <bookId> --format markdown --output notes.md
 weread notes mine <bookId> --count 20
 weread notes underlines <bookId> <chapterUid>
 weread notes best <bookId> --chapter-uid <chapterUid>
@@ -73,7 +80,7 @@ References are loaded on demand to keep startup context lean. Load them only whe
 
 ### Book Details
 
-If the user gives a title rather than an ID, search first and extract `bookInfo.bookId` from the result:
+If the user gives a title rather than an ID, prefer `weread --json book resolve "<title>" --limit 5` and use `items[].bookId`.
 
 - Metadata: `book info`
 - Chapter UIDs (needed for notes/highlights by chapter): `book chapters`
@@ -81,30 +88,32 @@ If the user gives a title rather than an ID, search first and extract `bookInfo.
 
 ### Shelf
 
-Use `weread shelf list`. For simple totals, compute the visible books, albums, and official-account collection from the output. For anything more nuanced (public/private split, audiobook handling), read `references/domain-rules.md` and use `--json` only if exact structured counting is needed.
+Use `weread --json shelf list`. For recent reading, use `weread --json shelf recent --limit 10`. For anything nuanced (public/private split, audiobook handling), read `references/domain-rules.md`.
 
 ### Reading Statistics
 
-Use `weread readdata detail` with `--mode weekly`, `monthly`, `annually`, or `overall`. Time fields in structured output are seconds. For historical or cross-period calculations, read `references/domain-rules.md`.
+Use `weread --json readdata summary --mode monthly` for common summaries, or `weread --json readdata detail` with `--mode weekly`, `monthly`, `annually`, or `overall`. Time fields in structured output are seconds. For historical or cross-period calculations, read `references/domain-rules.md`.
 
 ### Notes and Highlights
 
-- Overview across all books: `weread notes notebooks`
-- Single-book exportable content usually needs both `bookmarks` and `mine`
+- Overview across all books: `weread --json notes notebooks`
+- Books with the most personal notes/highlights: `weread --json notes top --limit 20`
+- Single-book export: `weread notes export <bookId> --format markdown --output <path>`
+- If manually combining data, use both `weread --json notes bookmarks <bookId>` and `weread --json notes mine <bookId>`
 - For counting rules, export limits, or popular highlight queries, read `references/domain-rules.md`
 
 ### Reviews
 
-Public reviews: `weread reviews list <bookId>` with `--type 0` (all) through `--type 4`. Single review: `weread reviews single <reviewId>`.
+Public reviews: `weread --json reviews list <bookId>` with `--type 0` (all) through `--type 4`. Single review: `weread --json reviews single <reviewId>`.
 
 ### Recommendations
 
-- Personalized: `weread discover recommend`
-- Similar books: `weread discover similar <bookId>`
+- Personalized: `weread --json discover recommend`
+- Similar books: `weread --json discover similar <bookId>`
 
 ## Pagination
 
-Stay shallow by default — only paginate further when the user explicitly asks for a complete export, a ranking, or a total that requires all pages. For pagination, use `--json` and pass the native cursor from the previous JSON result:
+Stay shallow by default — only paginate further when the user explicitly asks for a complete export, a ranking, or a total that requires all pages. Use `--limit` for display size and `--all` where supported. For manual pagination, use `--json` and pass the native cursor from the previous JSON result:
 
 - Search: `hasMore == 1` → pass last item `searchIdx` as `--max-idx`
 - Notebooks: `hasMore == 1` → pass last `books[].sort` as `--last-sort`
@@ -128,10 +137,12 @@ The CLI normalizes errors to JSON:
 
 - `missing_auth`: read `references/first-use.md` and help configure the key
 - `upgrade_required`: stop immediately and follow `upgrade_info.message`; don't continue the original task until upgraded
-- `api_error`, `http_error`, `network_error`, `invalid_json`: report the failure; retry only when repeating is safe
+- `upstream_timeout`, `network_error`: these are retryable; the CLI already retries transient failures before returning the error
+- `api_error`, `http_error`, `invalid_json`: report the failure; retry only when repeating is safe
 
 ## User-Facing Output
 
+- Default to `--json`; use `--compact` when a command returns too much metadata for the task
 - Convert Unix timestamps to readable dates
 - Convert seconds to hours and minutes
 - Use numbered lists for search results, shelf entries, notes, reviews, and recommendations

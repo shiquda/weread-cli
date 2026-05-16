@@ -28,6 +28,7 @@ export interface GatewayFailure {
     type:
       | "missing_auth"
       | "network_error"
+      | "upstream_timeout"
       | "http_error"
       | "invalid_json"
       | "api_error"
@@ -36,6 +37,8 @@ export interface GatewayFailure {
     message: string;
     status?: number;
     errcode?: number | string;
+    retryable?: boolean;
+    attempts?: number;
   };
   response?: unknown;
   upgrade_info?: unknown;
@@ -120,33 +123,7 @@ export class WereadClient {
       if (value !== undefined) body[key] = value;
     }
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
-
-    let response: Response;
-    try {
-      response = await fetch(this.baseUrl, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${this.apiKey}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify(body),
-        signal: controller.signal
-      });
-    } catch (error) {
-      throw new WereadError({
-        ok: false,
-        api_name: apiName,
-        skill_version: SKILL_VERSION,
-        error: {
-          type: "network_error",
-          message: error instanceof Error ? error.message : "Network request failed"
-        }
-      });
-    } finally {
-      clearTimeout(timeout);
-    }
+    const response = await this.fetchWithRetry(apiName, body);
 
     const text = await response.text();
     let data: unknown;
@@ -167,6 +144,21 @@ export class WereadClient {
     }
 
     if (!response.ok) {
+      if (response.status === 499) {
+        throw new WereadError({
+          ok: false,
+          api_name: apiName,
+          skill_version: SKILL_VERSION,
+          error: {
+            type: "upstream_timeout",
+            message: "Upstream request timed out with HTTP 499",
+            status: response.status,
+            retryable: true,
+            attempts: 3
+          },
+          response: data
+        });
+      }
       throw new WereadError({
         ok: false,
         api_name: apiName,
@@ -174,7 +166,9 @@ export class WereadClient {
         error: {
           type: "http_error",
           message: `Gateway HTTP ${response.status}`,
-          status: response.status
+          status: response.status,
+          retryable: false,
+          attempts: 1
         },
         response: data
       });
@@ -220,6 +214,64 @@ export class WereadClient {
       data
     };
   }
+
+  private async fetchWithRetry(apiName: string, body: Record<string, JsonValue>): Promise<Response> {
+    const maxAttempts = 3;
+    let lastNetworkError: unknown;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
+      try {
+        const response = await fetch(this.baseUrl, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${this.apiKey}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify(body),
+          signal: controller.signal
+        });
+        if (response.status === 499 && attempt < maxAttempts) {
+          await response.arrayBuffer().catch(() => undefined);
+          await delay(150 * attempt);
+          continue;
+        }
+        return response;
+      } catch (error) {
+        lastNetworkError = error;
+        if (attempt < maxAttempts && isRetryableNetworkError(error)) {
+          await delay(150 * attempt);
+          continue;
+        }
+        throw new WereadError({
+          ok: false,
+          api_name: apiName,
+          skill_version: SKILL_VERSION,
+          error: {
+            type: "network_error",
+            message: error instanceof Error ? error.message : "Network request failed",
+            retryable: isRetryableNetworkError(error),
+            attempts: attempt
+          }
+        });
+      } finally {
+        clearTimeout(timeout);
+      }
+    }
+
+    throw new WereadError({
+      ok: false,
+      api_name: apiName,
+      skill_version: SKILL_VERSION,
+      error: {
+        type: "network_error",
+        message: lastNetworkError instanceof Error ? lastNetworkError.message : "Network request failed",
+        retryable: true,
+        attempts: maxAttempts
+      }
+    });
+  }
 }
 
 function getObjectField(value: unknown, key: string): unknown {
@@ -245,4 +297,13 @@ function extractApiMessage(data: unknown): string {
 
 function nonEmpty(value: string | undefined): string | undefined {
   return value && value.trim() ? value : undefined;
+}
+
+function isRetryableNetworkError(error: unknown): boolean {
+  if (!(error instanceof Error)) return true;
+  return error.name === "AbortError" || /fetch failed|network|timeout|aborted/i.test(error.message);
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }

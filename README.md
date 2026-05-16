@@ -15,7 +15,7 @@ npm install -g weread-agent-cli
 安装 Skill：
 
 ```bash
-npx skills add shiquda/weread-cli
+npx skills add shiquda/weread-cli --yes
 ```
 
 确认命令可用：
@@ -30,7 +30,7 @@ weread doctor
 ```text
 请阅读 https://github.com/shiquda/weread-cli ，帮我安装 WeRead CLI 和配套 Skill：
 1. 使用 npm 安装已发布的 CLI 包 weread-agent-cli，确认 weread 命令可用。
-2. 使用 npx skills add shiquda/weread-cli 安装配套 Skill。
+2. 使用 npx skills add shiquda/weread-cli --yes 安装配套 Skill。
 3. 运行 weread doctor 检查本机配置。
 4. 如果还没有 API Key，请指导我打开 https://weread.qq.com/r/weread-skills 获取 key，并用 weread config set-key "wrk-..." 完成登录配置。
 ```
@@ -87,21 +87,29 @@ weread doctor
 ```powershell
 weread doctor
 weread search "三体" --scope book
+weread book resolve "三体"
 weread shelf list
+weread shelf recent --limit 10
 weread book info 3300045871
 weread book chapters 3300045871
 weread book progress 3300045871
 weread notes notebooks --count 100
+weread notes top --limit 20
+weread notes export 3300045871 --format markdown --output notes.md
 weread readdata detail --mode annually
+weread readdata summary --mode monthly
 weread discover recommend --count 12
 ```
 
-脚本需要稳定解析输出时使用 `--json`：
+Agent 默认建议使用 `--json`，脚本或精确结构化解析也应使用 `--json`。大输出可先写入文件再摘要回复：
 
 ```bash
-weread --json search "三体" --count 5
-weread --json api list
+weread --json --compact search "三体" --count 5
+weread --json notes bookmarks 3300045871 --compact > highlights.json
+weread notes export 3300045871 --format markdown --output notes.md
 ```
+
+Agent 或脚本做数据解析时应依赖 `--json` 的字段；普通终端查看可以直接使用 human-readable 输出。human 输出会在截断时提示 `Showing first ...`，可用 `--limit` 或 `--all` 控制显示量。
 
 低层逃生口：
 
@@ -115,7 +123,13 @@ Skill 需要配合已发布的 CLI 包使用：
 
 ```bash
 npm install -g weread-agent-cli
-npx skills add shiquda/weread-cli
+npx skills add shiquda/weread-cli --yes
+```
+
+OpenClaw 等需要显式工作目录的环境可用：
+
+```bash
+npx skills add shiquda/weread-cli --yes --workdir ~/.openclaw/workspace
 ```
 
 项目内 Skill 位于：

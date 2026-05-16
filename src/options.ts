@@ -18,6 +18,10 @@ export function jsonMode(command: Command): boolean {
   return Boolean(command.optsWithGlobals<{ json?: boolean }>().json);
 }
 
+export function compactMode(command: Command): boolean {
+  return Boolean(command.optsWithGlobals<{ compact?: boolean }>().compact);
+}
+
 export function intOption(value: string | undefined, name: string): number | undefined {
   if (value === undefined) return undefined;
   const parsed = Number(value);
@@ -25,6 +29,17 @@ export function intOption(value: string | undefined, name: string): number | und
     throw new Error(`${name} must be an integer`);
   }
   return parsed;
+}
+
+export function positiveIntOption(value: string | undefined, name: string): number | undefined {
+  const parsed = intOption(value, name);
+  if (parsed !== undefined && parsed <= 0) throw new Error(`${name} must be a positive integer`);
+  return parsed;
+}
+
+export function outputLimit(opts: { limit?: string; all?: boolean }, fallback: number): number | undefined {
+  if (opts.all) return undefined;
+  return positiveIntOption(opts.limit, "--limit") ?? fallback;
 }
 
 export function optionalString(value: string | undefined): string | undefined {

@@ -74,3 +74,34 @@ test("client treats upgrade_info as a hard stop", async () => {
     server.close();
   }
 });
+
+test("client retries transient HTTP 499 responses", async () => {
+  let requests = 0;
+  const server = createServer((_req, res) => {
+    requests += 1;
+    res.setHeader("content-type", "application/json");
+    if (requests === 1) {
+      res.statusCode = 499;
+      res.end(JSON.stringify({ message: "timeout" }));
+      return;
+    }
+    res.end(JSON.stringify({ errcode: 0, books: [] }));
+  });
+
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  try {
+    const address = server.address();
+    assert(address && typeof address === "object");
+    const client = new WereadClient({
+      apiKey: "wrk-test-token",
+      baseUrl: `http://127.0.0.1:${address.port}`,
+      timeoutMs: 5000
+    });
+
+    const result = await client.call("/review/list", { bookId: "1" });
+    assert.equal(result.ok, true);
+    assert.equal(requests, 2);
+  } finally {
+    server.close();
+  }
+});
