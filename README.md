@@ -6,25 +6,41 @@ CLI 命令名是 `weread`。项目内同时提供了一个配套 Skill，指导 
 
 ## 安装
 
-发布版本：
+安装 CLI：
 
-```powershell
+```bash
 npm install -g weread-agent-cli
 ```
 
-本地开发：
+安装 Skill：
 
-```powershell
-npm install
-npm run build
-npm link
+```bash
+npx skills add shiquda/weread-cli
 ```
 
 确认命令可用：
 
-```powershell
+```bash
 weread --version
-weread --json doctor
+weread doctor
+```
+
+也可以把下面这段发给 Agent，让它阅读本项目并完成安装和配置引导：
+
+```text
+请阅读 https://github.com/shiquda/weread-cli ，帮我安装 WeRead CLI 和配套 Skill：
+1. 使用 npm 安装已发布的 CLI 包 weread-agent-cli，确认 weread 命令可用。
+2. 使用 npx skills add shiquda/weread-cli 安装配套 Skill。
+3. 运行 weread doctor 检查本机配置。
+4. 如果还没有 API Key，请指导我打开 https://weread.qq.com/r/weread-skills 获取 key，并用 weread config set-key "wrk-..." 完成登录配置。
+```
+
+本地开发：
+
+```bash
+npm install
+npm run build
+npm link
 ```
 
 ## 配置凭据
@@ -48,8 +64,8 @@ weread config set-key "wrk-..."
 
 也可以临时使用环境变量，环境变量优先级更高：
 
-```powershell
-$env:WEREAD_API_KEY = "wrk-..."
+```bash
+export WEREAD_API_KEY="wrk-..."
 ```
 
 常用配置命令：
@@ -62,8 +78,8 @@ weread config set-timeout 30000
 
 配置后检查：
 
-```powershell
-weread --json doctor
+```bash
+weread doctor
 ```
 
 ## 常用命令
@@ -80,9 +96,9 @@ weread readdata detail --mode annually
 weread discover recommend --count 12
 ```
 
-Agent 或脚本解析时使用 `--json`：
+脚本需要稳定解析输出时使用 `--json`：
 
-```powershell
+```bash
 weread --json search "三体" --count 5
 weread --json api list
 ```
@@ -95,9 +111,10 @@ weread --json api call /store/search --param keyword=三体 --param scope=10
 
 ## Skill 安装
 
-推荐使用 `skills` CLI 安装：
+Skill 需要配合已发布的 CLI 包使用：
 
-```powershell
+```bash
+npm install -g weread-agent-cli
 npx skills add shiquda/weread-cli
 ```
 

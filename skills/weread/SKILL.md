@@ -1,144 +1,119 @@
 ---
 name: weread
-description: "Use this skill for 微信读书 and WeRead tasks, including book search, shelf inspection, reading progress, notes, highlights, reviews, reading statistics, recommendations, or first-time API key setup. It instructs agents to use the local weread CLI."
+description: "Use this skill whenever the user mentions 微信读书, WeRead, 书架, 读书时间, 读书笔记, 划线, or wants to do anything with their personal reading data. This includes: book search (搜书/找书), shelf inspection, reading progress and time, notes and highlights export, book reviews, reading statistics (weekly/monthly/annual/overall), personalized recommendations, and first-time API key setup. Always use this skill before running any WeRead-related commands — it provides the correct CLI abstractions, domain rules, and error handling patterns."
 ---
 
 # WeRead
 
-Use the local `weread` command as the execution layer for WeRead tasks. The CLI is based on WeRead officially supported APIs and handles authentication, request shape, `skill_version`, JSON parsing, upgrade checks, and normalized errors.
+The local `weread` CLI is the only interface you need. It handles authentication, request shape, `skill_version`, JSON parsing, upgrade checks, and normalized errors — writing ad hoc `curl` requests would mean reimplementing all of that and losing the normalized error layer.
 
-Do not write ad hoc `curl` requests for normal work. The agent-facing abstraction is the CLI.
+Use normal human-readable output for direct answers. Use `--json` only when a script or exact structured extraction needs stable machine-readable output, such as pagination or cross-command field joins.
 
 ## First Decision
 
-Run this before any WeRead API work:
+Before any WeRead work, check auth and CLI health:
 
 ```bash
-weread --json doctor
+weread doctor
 ```
 
-If `auth_configured` is false, read `references/first-use.md` and guide the user through getting an API Key from:
-
-```text
-https://weread.qq.com/r/weread-skills
-```
-
-Then configure it with:
-
-```bash
-weread config set-key "wrk-..."
-```
-
-Use `--json` whenever you need to parse, combine, paginate, or cite exact fields. Human-readable output is acceptable only for short direct answers.
+If the `weread` command is missing, or if `auth_configured` is false, read `references/first-use.md` and guide the user through setup.
 
 ## Command Map
 
-Prefer first-class commands:
-
 ```bash
-weread --json search "三体" --scope book --count 10
-weread --json book info <bookId>
-weread --json book chapters <bookId>
-weread --json book progress <bookId>
-weread --json shelf list
-weread --json readdata detail --mode monthly
-weread --json notes notebooks --count 100
-weread --json notes bookmarks <bookId>
-weread --json notes mine <bookId> --count 20
-weread --json notes underlines <bookId> <chapterUid>
-weread --json notes best <bookId> --chapter-uid <chapterUid>
-weread --json notes readreviews <bookId> <chapterUid> --reviews-json '[{"range":"900-2004","count":20}]'
-weread --json reviews list <bookId> --type 1 --count 20
-weread --json reviews single <reviewId>
-weread --json discover recommend --count 12
-weread --json discover similar <bookId> --count 12
-weread --json api list
+weread search "三体" --scope book --count 10
+weread book info <bookId>
+weread book chapters <bookId>
+weread book progress <bookId>
+weread shelf list
+weread readdata detail --mode monthly
+weread notes notebooks --count 100
+weread notes bookmarks <bookId>
+weread notes mine <bookId> --count 20
+weread notes underlines <bookId> <chapterUid>
+weread notes best <bookId> --chapter-uid <chapterUid>
+weread notes readreviews <bookId> <chapterUid> --reviews-json '[{"range":"900-2004","count":20}]'
+weread reviews list <bookId> --type 1 --count 20
+weread reviews single <reviewId>
+weread discover recommend --count 12
+weread discover similar <bookId> --count 12
+weread api list
 ```
 
-Use the raw escape hatch only when a supported API is not covered by a first-class command:
+When a supported API isn't covered by a first-class command, use the raw escape hatch:
 
 ```bash
-weread --json api call /store/search --param keyword=三体 --param scope=10
+weread api call /store/search --param keyword=三体 --param scope=10
 ```
 
 ## When To Read References
 
-- First-time setup, missing auth, or API Key questions: read `references/first-use.md`.
-- Shelf totals, public/private shelf counts, audiobook handling, or article-collection handling: read `references/domain-rules.md`.
-- Notes, highlights, bookmarks, personal ideas, public reviews, or exports: read `references/domain-rules.md`.
-- Reading statistics, historical periods, cross-year ranges, or time-unit interpretation: read `references/domain-rules.md`.
-- Deep links to books, chapters, highlights, or ideas: read `references/domain-rules.md`.
+References are loaded on demand to keep startup context lean. Load them only when the task requires it:
 
-The references intentionally omit low-level request mechanics already handled by the CLI.
+- **First-time setup, missing auth, or API Key questions**: read `references/first-use.md`
+- **Shelf totals, public/private counts, audiobook or article-collection handling**: read `references/domain-rules.md`
+- **Notes, highlights, bookmarks, personal ideas, public reviews, or exports**: read `references/domain-rules.md`
+- **Reading statistics, historical periods, cross-year ranges, or time-unit interpretation**: read `references/domain-rules.md`
+- **Deep links to books, chapters, highlights, or ideas**: read `references/domain-rules.md`
 
 ## Intent Routing
 
-Search:
+### Search
 
-- User asks to find a book, search books, get a `bookId`, or says `搜书` or `找书`: `weread --json search "<keyword>" --scope book`
-- User says generic `搜一下`: use `--scope all`
-- User asks for web fiction or `网文`: use `--scope fiction`
-- User asks for audiobooks, podcasts, `听书`, `有声书`, or `专辑`: use `--scope audio`
-- User asks for authors: use `--scope author`
-- User asks for full-text search or `书里提到`: use `--scope fulltext`
-- User asks for book lists: use `--scope list`
-- User asks for official accounts: use `--scope mp`
-- User asks for articles: use `--scope article`
+- Find a book, get a `bookId`, or user says `搜书`/`找书`: `weread search "<keyword>" --scope book`
+- Generic `搜一下` or mixed intent: `--scope all`
+- Web fiction or `网文`: `--scope fiction`
+- Audiobooks, podcasts, `听书`, `有声书`, or `专辑`: `--scope audio`
+- Authors: `--scope author`
+- Full-text search or `书里提到`: `--scope fulltext`
+- Book lists: `--scope list`
+- Official accounts: `--scope mp`
+- Articles: `--scope article`
 
-Book details:
+### Book Details
 
-- If the user gives a title, search first and use `bookInfo.bookId`.
-- Use `book info` for metadata, `book chapters` for chapter UIDs, and `book progress` for reading progress.
-- Reading progress is an integer percent from `0` to `100`; `1` means `1%`, not complete.
+If the user gives a title rather than an ID, search first and extract `bookInfo.bookId` from the result:
 
-Shelf:
+- Metadata: `book info`
+- Chapter UIDs (needed for notes/highlights by chapter): `book chapters`
+- Reading progress: `book progress` — `progress` is an integer percent; `1` means 1%, only `100` means finished
 
-- Use `weread --json shelf list`.
-- For simple shelf totals, compute `books.length + albums.length + (mp ? 1 : 0)`.
-- For anything more nuanced, read `references/domain-rules.md`.
+### Shelf
 
-Reading statistics:
+Use `weread shelf list`. For simple totals, compute the visible books, albums, and official-account collection from the output. For anything more nuanced (public/private split, audiobook handling), read `references/domain-rules.md` and use `--json` only if exact structured counting is needed.
 
-- Use `weread --json readdata detail`.
-- Modes are `weekly`, `monthly`, `annually`, and `overall`.
-- Time fields are seconds.
-- Read `references/domain-rules.md` for historical or cross-period calculations.
+### Reading Statistics
 
-Notes and highlights:
+Use `weread readdata detail` with `--mode weekly`, `monthly`, `annually`, or `overall`. Time fields in structured output are seconds. For historical or cross-period calculations, read `references/domain-rules.md`.
 
-- Notebook overview: `weread --json notes notebooks`.
-- Single-book exportable content usually needs both:
-  ```bash
-  weread --json notes bookmarks <bookId>
-  weread --json notes mine <bookId>
-  ```
-- Read `references/domain-rules.md` before answering totals, exports, bookmark questions, or popular-highlight questions.
+### Notes and Highlights
 
-Reviews:
+- Overview across all books: `weread notes notebooks`
+- Single-book exportable content usually needs both `bookmarks` and `mine`
+- For counting rules, export limits, or popular highlight queries, read `references/domain-rules.md`
 
-- Public reviews: `weread --json reviews list <bookId>`.
-- `--type 0` all, `--type 1` recommended, `--type 2` negative, `--type 3` recent, `--type 4` normal.
-- Single review details: `weread --json reviews single <reviewId>`.
+### Reviews
 
-Recommendations:
+Public reviews: `weread reviews list <bookId>` with `--type 0` (all) through `--type 4`. Single review: `weread reviews single <reviewId>`.
 
-- Personalized recommendations: `weread --json discover recommend`.
-- Similar books: `weread --json discover similar <bookId>`.
+### Recommendations
+
+- Personalized: `weread discover recommend`
+- Similar books: `weread discover similar <bookId>`
 
 ## Pagination
 
-Keep calls shallow unless the user asks for a complete export, a ranking, or a total that requires all pages.
+Stay shallow by default — only paginate further when the user explicitly asks for a complete export, a ranking, or a total that requires all pages. For pagination, use `--json` and pass the native cursor from the previous JSON result:
 
-Use the native cursor from the previous JSON result:
-
-- Search: if `hasMore` is `1`, pass the last item `searchIdx` as `--max-idx`.
-- Notebooks: if `hasMore` is `1`, pass the last `books[].sort` as `--last-sort`.
-- Reviews: pass the last review `idx` as `--max-idx` and returned `synckey` as `--synckey`.
-- Similar recommendations: pass the last item `idx` as `--max-idx` and returned `booksimilar.sessionId` as `--session-id`.
+- Search: `hasMore == 1` → pass last item `searchIdx` as `--max-idx`
+- Notebooks: `hasMore == 1` → pass last `books[].sort` as `--last-sort`
+- Reviews: pass last review `idx` as `--max-idx` and returned `synckey` as `--synckey`
+- Similar: pass last item `idx` as `--max-idx` and `booksimilar.sessionId` as `--session-id`
 
 ## Error Handling
 
-The CLI returns normalized JSON errors:
+The CLI normalizes errors to JSON:
 
 ```json
 {
@@ -151,17 +126,13 @@ The CLI returns normalized JSON errors:
 }
 ```
 
-Handle important error types this way:
-
-- `missing_auth`: read `references/first-use.md` and help configure the key.
-- `upgrade_required`: stop immediately and follow `upgrade_info.message`; do not continue the original workflow until upgraded.
-- `api_error`, `http_error`, `network_error`, `invalid_json`: report the failure and retry only when repeating the request is safe.
+- `missing_auth`: read `references/first-use.md` and help configure the key
+- `upgrade_required`: stop immediately and follow `upgrade_info.message`; don't continue the original task until upgraded
+- `api_error`, `http_error`, `network_error`, `invalid_json`: report the failure; retry only when repeating is safe
 
 ## User-Facing Output
 
-When summarizing results for the user:
-
-- Convert Unix timestamps to dates.
-- Convert seconds to hours and minutes.
-- Use numbered lists for search results, shelf entries, notes, reviews, and recommendations.
-- Include WeRead deep links when useful; read `references/domain-rules.md` for link formats and edge cases.
+- Convert Unix timestamps to readable dates
+- Convert seconds to hours and minutes
+- Use numbered lists for search results, shelf entries, notes, reviews, and recommendations
+- Include WeRead deep links when useful; format rules are in `references/domain-rules.md`

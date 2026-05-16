@@ -1,6 +1,21 @@
 # First Use And API Key Setup
 
-Use this reference when `weread --json doctor` reports `auth_configured: false`, when the user asks how to get an API Key, or when the user is setting up WeRead for the first time.
+Use this reference when `weread doctor` reports missing auth, when the `weread` command is not installed, when the user asks how to get an API Key, or when the user is setting up WeRead for the first time.
+
+## Install The CLI
+
+If the `weread` command is missing, install the published CLI package:
+
+```bash
+npm install -g weread-agent-cli
+```
+
+Then verify the command:
+
+```bash
+weread --version
+weread doctor
+```
 
 ## Get An API Key
 
@@ -19,7 +34,7 @@ Use this reference when `weread --json doctor` reports `auth_configured: false`,
    ```
 5. Verify:
    ```bash
-   weread --json doctor
+   weread doctor
    ```
 
 ## Where The Key Is Stored
@@ -33,7 +48,8 @@ The CLI stores the key in:
 The environment variable `WEREAD_API_KEY` takes priority over the config file. This is useful for temporary overrides or CI:
 
 ```bash
-WEREAD_API_KEY="wrk-..." weread --json doctor
+export WEREAD_API_KEY="wrk-..."
+weread doctor
 ```
 
 ## Safety Notes
@@ -41,7 +57,7 @@ WEREAD_API_KEY="wrk-..." weread --json doctor
 - Treat the API Key as a private credential.
 - Do not commit the key to a repository.
 - Do not paste the key into issue trackers, README examples, or shared logs.
-- `weread config list` and `weread --json doctor` only show a masked preview.
+- `weread config list` and `weread doctor` only show a masked preview.
 
 ## Common Setup Problems
 
