@@ -1,10 +1,23 @@
 {
-  "name": "weread-cli",
+  "name": "weread-agent-cli",
   "version": "0.1.0",
   "description": "Agent-friendly CLI based on officially supported WeRead APIs.",
   "type": "module",
+  "author": "shiquda",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/shiquda/weread-cli.git"
+  },
+  "bugs": {
+    "url": "https://github.com/shiquda/weread-cli/issues"
+  },
+  "homepage": "https://github.com/shiquda/weread-cli#readme",
   "bin": {
     "weread": "./dist/cli.js"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "files": [
     "dist",
